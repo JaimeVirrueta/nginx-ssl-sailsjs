@@ -1,0 +1,212 @@
+ACTUALIZAR REPOSITORIOS
+
+sudo yum install epel-release
+curl --silent --location https://rpm.nodesource.com/setup_4.x | bash -
+
+
+INSTALAR PAQUETES
+
+sudo yum install nano nginx php php-mysql php-fpm mariadb-server mariadb certbot
+sudo yum install -y nodejs
+
+CONFIGURAR MYSQL
+
+sudo systemctl start mariadb
+sudo mysql_secure_installation
+sudo systemctl enable mariadb.service
+
+sudo systemctl enable firewalld
+sudo systemctl start firewalld
+sudo systemctl status firewalld
+
+sudo firewall-cmd --add-service=mysql --permanent
+
+sudo firewall-cmd --reload
+
+mysql -u root -p
+
+use mysql;
+
+SELECT host, user, password FROM user WHERE user = 'root';
+
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'password' WITH GRANT OPTION;
+
+FLUSH PRIVILEGES;
+
+
+CONFIGURAR PHP
+
+sudo nano /etc/php.ini
+cgi.fix_pathinfo  1
+
+sudo nano /etc/php-fpm.d/www.conf
+listen = /var/run/php-fpm/php-fpm.sock
+listen.owner = nobody
+listen.group = nobody
+user = nginx
+group = nginx
+
+sudo systemctl start php-fpm
+sudo systemctl enable php-fpm
+
+
+CONFIGURAR NGINX
+
+sudo systemctl start nginx
+
+sudo firewall-cmd --permanent --zone=public --add-service=http
+sudo firewall-cmd --permanent --zone=public --add-service=https
+
+sudo firewall-cmd --reload
+sudo systemctl enable nginx
+
+ip addr
+
+NODE
+
+node -v
+sudo npm cache clean -f
+sudo npm install -g n
+sudo n stable
+
+NGINX CONFIGURACION SITIOS
+crear una página web en /clientes/web_estatica/index.html
+
+ir a /etc/nginx/conf.d
+
+PAGINA ESTÁTICA
+
+server {
+        listen   80;
+        root /clientes/web_estatica;
+        index index.html;
+
+        server_name charla.tibajodemanda.com;
+}
+
+nginx -t
+sudo systemctl reload nginx
+
+WEB SAILS
+
+Configuración NGINX - SAILS
+
+Abrir puerto
+sudo firewall-cmd --add-port=1337/tcp --permanent
+firewall-cmd --reload
+
+
+server {
+    listen       80;
+    server_name web02.tibajodemanda.com;
+
+    location / {
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header Host $http_host;
+      proxy_set_header X-NginX-Proxy true;
+
+      proxy_pass http://127.0.0.1:1337/;
+      proxy_redirect off;
+
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+    }
+}
+
+nginx -t
+sudo systemctl reload nginx
+
+Configuracion NGINX - SAILS - SOCKET.IO
+
+Abrir puerto
+sudo firewall-cmd --add-port=1338/tcp --permanent
+firewall-cmd --reload
+
+server {
+    listen 80;
+    server_name web03.tibajodemanda.com;
+
+    access_log /var/log/nginx/web03.access.log;
+    error_log  /var/log/nginx/web03.error.log error;
+
+    keepalive_timeout 5;
+
+    location / {
+        proxy_pass http://127.0.0.1:1338;
+    }
+
+    location /socket.io {
+        proxy_pass http://127.0.0.1:1338;
+        proxy_redirect off;
+        proxy_pass_request_headers on;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-NginX-Proxy true;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Server $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+
+nginx -t
+sudo systemctl reload nginx
+
+TRABAJANDO CON CERTIFICADO
+
+systemctl stop nginx
+
+certbot certonly --standalone-supported-challenges http-01 -d web04.tibajodemanda.com
+
+openssl dhparam -out dhparams.pem 2048   (dentro de la carpeta /etc/letsencrypt/live/<<dominio>>)
+
+CONFIGURACIÓN SSL
+sudo firewall-cmd --add-port=1339/tcp --permanent
+firewall-cmd --reload
+
+server {
+    #listen 80;
+    listen 443 ssl;
+    server_name web04.tibajodemanda.com;
+
+    ssl_certificate /etc/letsencrypt/live/web04.tibajodemanda.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/web04.tibajodemanda.com/privkey.pem;
+    ssl_dhparam /etc/letsencrypt/live/web04.tibajodemanda.com/dhparams.pem;
+
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+    ssl_prefer_server_ciphers on;
+    #ssl_ciphers 'EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH';
+    ssl_ciphers HIGH:!aNULL:!MD5;
+  
+
+     …
+
+}
+
+nginx -t
+sudo systemctl start nginx
+sudo systemctl reload nginx
+
+server {
+        listen 80;
+        server_name web03.tibajodemanda.com;
+
+        return 301 https://web03.tibajodemanda.com;
+}
+
+
+PRODUCCIÓN
+
+pm2 start app.js -n <<nombre app>> -x -- --prod
+
+
+
+
+
+
+
